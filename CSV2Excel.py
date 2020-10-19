@@ -4,518 +4,389 @@ GitHub: @adafdelcid
 Oct.2020
 
 CSV2Excel: Converts a CSV file from sequenced samples into an excel spreadsheet. Takes in formulation sheet
-with the standard formatting of the Dahlman Lab. And consequently performs enrichment analysis by formulation
+with the standard formatting of the Dahlman Lab. Lastly, performs enrichment analysis by formulation
 composition and cell type.
 '''
-
 import pandas as pd
 import numpy as np
 import openpyxl
 from openpyxl import Workbook
 import math
 
-# -------------------------------------------------------------------------------
-# Imports csv file with barcode readings and create spreadsheet 
-# with formulation sheets and normalized barcode readings
-# -------------------------------------------------------------------------------
-
-# Create new excel sheet
-new_file_name = "/Users/adadelcid/Documents/Python_Enrichment_Project/Normalized Counts Copy.xlsx" #RENAME: 
-wb = Workbook()
-wb.save(new_file_name)
-
-# Turn formulation sheet into data frames
-formulation_sheet_filepath = "/Users/adadelcid/Documents/Python_Enrichment_Project/Formulation Sheet Copy.xlsx"
-df_formulations = pd.read_excel(formulation_sheet_filepath, sheet_name = "Formulations")
-
-# Make spreadsheet with formulation sheet
-with pd.ExcelWriter(new_file_name,engine="openpyxl",mode = "w") as writer:
-	df_formulations.to_excel(writer, sheet_name = "Formulations", index = False)
-
-# Read CSV file and save as data frame
-csv_filepath = "/Users/adadelcid/Documents/Python_Enrichment_Project/normcounts copy.csv"
-df = pd.read_csv(csv_filepath,sep = ',',header= 0)
-
-# Copy csv data frame to excel sheet
-new_sheet_name = "Normalized Counts"
-with pd.ExcelWriter(new_file_name,engine="openpyxl",mode = "a") as writer:
-	df.to_excel(writer, sheet_name = new_sheet_name)
-
-# Save and edit the excel sheet (name cell B1 : "BC")
-xfile = openpyxl.load_workbook(new_file_name)
-sheet = xfile[new_sheet_name]
-sheet["B1"] = "BC"
-sheet.delete_cols(1)
-xfile.save(new_file_name)
-
-# -------------------------------------------------------------------------------
-# Calculate 99.9 percentile and remove outliers
-# -------------------------------------------------------------------------------
-
-# get row names and save barcode column
-df_normalized_counts = pd.read_excel(new_file_name, sheet_name = new_sheet_name)
-rows = list(df_normalized_counts.index)
-barcodes = df_normalized_counts["BC"]
-
-
-# calculate 99.9 percentile
-percentile = 99.9 #could use user input and set to 99.9 if no input
-df_normalized_no_bc = df_normalized_counts.drop("BC",axis = 1) # temporarily remove BC colum
-percentile_99 = np.percentile(df_normalized_no_bc.to_numpy(),percentile) # find 99.9 percentile value
-
-# set outliers to NaN (numbers greater than 99.9 percentile)
-columns = df_normalized_no_bc.columns.tolist()
-for row in rows:
-	for column in columns:
-		if df_normalized_no_bc.at[row,column] >= percentile_99:
-			df_normalized_no_bc.at[row,column] = np.nan
-
-df_normalized_no_bc.insert(loc=0,column = "BC", value = barcodes) # add the BC column again
-
-# -------------------------------------------------------------------------------
-# Get organized columns of data frame by cell type
-# -------------------------------------------------------------------------------
-
-# list of sorted cells
-'''**********************must ask user to specify cells types*******************'''
-sorted_cells = ["VH","VE","VK","VI","SB","ST","SM","SE"] 
-
-# organize columns
-organized_columns = []
-for cell_type in sorted_cells:
-	for column in columns:
-		if cell_type in column:
-			organized_columns.append(column)
-
-count_repeats = len(columns)//len(sorted_cells) # number of repeats per cell type, should be same for all
-
-# -------------------------------------------------------------------------------
-# Combines formulation sheet and normalized count into data frame
-# -------------------------------------------------------------------------------
-
-# inner mege of data frames around barcodes ("BC")
-df_merged = df_formulations.merge(df_normalized_no_bc,on="BC")
-
-# ordered columns
-l1 = df_merged.columns.tolist()[:10] # columns up to phospholipid%
-order_columns = l1 + organized_columns
-
-# rearrange columns on df_merged
-df_merged = df_merged[order_columns]
-
-# append merged data frames onto excel spreadsheet
-with pd.ExcelWriter(new_file_name,engine="openpyxl",mode = "a") as writer:
-	df_merged.to_excel(writer, sheet_name = "Formulations + Norm Counts",index = False)
-
-# -------------------------------------------------------------------------------
-# Find average of each cell type
-# -------------------------------------------------------------------------------
-df_averaged = df_merged
-
-for index in range(len(sorted_cells)):
-	temporary_list = []
-	for column in organized_columns:
-		if sorted_cells[index] in column:
-			temporary_list.append(column)
-	df_averaged[sorted_cells[index]] = df_averaged[temporary_list].mean(axis=1)
-
-order_columns = l1 + sorted_cells
-df_averaged = df_averaged[order_columns]
-
-# append merged data frames onto excel spreadsheet
-with pd.ExcelWriter(new_file_name,engine="openpyxl",mode = "a") as writer:
-	df_averaged.to_excel(writer, sheet_name = "Formulation Enrichment", index = False)
-
-# -------------------------------------------------------------------------------
-# Sample enrichment calculations component_x
-# -------------------------------------------------------------------------------
-
-# list = [] empty list to save component x to be studied
-
-# for component_x in each formulation:
-#	 if component_x not in list of saved components:
-#		 add component_x to list
-# organize list alphabetically
-
-# list of total enrichment for component_x = list of zeros
-# for each formulation in component_x:
-# 	 for index in range(len(list)):
-# 		 if component_type == item on list at index:
-# 			 list[index] += 1
-# 			 break
-
-# total = sum(list of total enrichment for component_x)
-
-# list_percent_total = []
-# for each_item in list of total enrichment for component_x :
-# 	 (round(each_lipomer/total,9)) append to list of total enrichment for component_x
-
-# list.append("TOTAL")
-# list of total enrichment for component_x .append(total)
-
-# -------------------------------------------------------------------------------
-# Get list of components            
-# -------------------------------------------------------------------------------
-
-# start lists to save items
-lipomers = []
-cholesterols = []
-pegs = []
-phospholipids = []
-lipomer_list = []
-cholesterol_list = []
-peg_list = []
-phospholipid_list = []
-
-for index in range(len(df_averaged["Lipomer %"].values)-2):
-	if df_averaged["Lipomer %"].values[index] not in lipomers:
-		lipomers.append(df_averaged["Lipomer %"].values[index])
-	if df_averaged["Cholesterol %"].values[index] not in cholesterols:
-		cholesterols.append(df_averaged["Cholesterol %"].values[index])
-	if df_averaged["PEG %"].values[index] not in pegs:
-		pegs.append(df_averaged["PEG %"].values[index])
-	if df_averaged["Phospholipid %"].values[index] not in phospholipids:
-		phospholipids.append(df_averaged["Phospholipid %"].values[index])
-	if df_averaged["Lipomer"].values[index] not in lipomer_list:
-		lipomer_list.append(df_averaged["Lipomer"].values[index])
-	if df_averaged["Cholesterol"].values[index] not in cholesterol_list:
-		cholesterol_list.append(df_averaged["Cholesterol"].values[index])
-	if df_averaged["PEG"].values[index] not in peg_list:
-		peg_list.append(df_averaged["PEG"].values[index])
-	if df_averaged["Phospholipid"].values[index] not in phospholipid_list:
-		phospholipid_list.append(df_averaged["Phospholipid"].values[index])
-
-lipomers.sort()
-cholesterols.sort()
-pegs.sort()
-phospholipids.sort()
-lipomer_list.sort()
-cholesterol_list.sort()
-peg_list.sort()
-phospholipid_list.sort()
-
-# -------------------------------------------------------------------------------
-# Lipomer Enrichment by percent
-# -------------------------------------------------------------------------------
-
-lipomer_total = [0]*len(lipomers)
-for bc_x in df_averaged["Lipomer %"].values:
-	for index in range(len(lipomers)):
-		if bc_x == lipomers[index]:
-			lipomer_total[index] += 1
-			break
-
-total = sum(lipomer_total)
-
-lipomer_percent_total = []
-for each_lipomer in lipomer_total:
-	lipomer_percent_total.append(round(each_lipomer/total,9))
-
-lipomers.append("TOTAL")
-lipomer_total.append(total)
-lipomer_percent_total.append(round(sum(lipomer_percent_total)))
-
-t_lipomers = [lipomers,lipomer_total,lipomer_percent_total]
-np_temporary = np.array(t_lipomers)
-np_temporary = np_temporary.T
-df_lipomers = pd.DataFrame(data = np_temporary, columns = ["Lipomer","Total #", "% of Total"])
-df_lipomers.name = "Lipomer Enrichment by %"
-
-# -------------------------------------------------------------------------------
-# Cholesterol Enrichment by percent
-# -------------------------------------------------------------------------------
-
-cholesterol_total = [0]*len(cholesterols)
-for bc_x in df_averaged["Cholesterol %"].values:
-	for index in range(len(cholesterols)):
-		if bc_x == cholesterols[index]:
-			cholesterol_total[index] += 1
-			break
-
-cholesterol_percent_total = []
-for each_cholesterol in cholesterol_total:
-	cholesterol_percent_total.append(round(each_cholesterol/total,9))
-
-cholesterols.append("TOTAL")
-cholesterol_total.append(total)
-cholesterol_percent_total.append(round(sum(cholesterol_percent_total)))
-
-t_cholesterols = [cholesterols,cholesterol_total,cholesterol_percent_total]
-np_temporary = np.array(t_cholesterols)
-np_temporary = np_temporary.T
-df_cholesterols = pd.DataFrame(data = np_temporary, columns = ["Cholesterol","Total #", "% of Total"])
-df_cholesterols.name = "Cholesterol Enrichment by %"
-
-# -------------------------------------------------------------------------------
-# PEG Enrichment by percent
-# -------------------------------------------------------------------------------
-
-peg_total = [0]*len(pegs)
-for bc_x in df_averaged["PEG %"].values:
-	for index in range(len(pegs)):
-		if bc_x == pegs[index]:
-			peg_total[index] += 1
-			break
-
-peg_percent_total = []
-for each_peg in peg_total:
-	peg_percent_total.append(round(each_peg/total,9))
-
-pegs.append("TOTAL")
-peg_total.append(total)
-peg_percent_total.append(round(sum(peg_percent_total)))
-
-t_pegs = [pegs,peg_total,peg_percent_total]
-np_temporary = np.array(t_pegs)
-np_temporary = np_temporary.T
-df_pegs = pd.DataFrame(data = np_temporary, columns = ["PEG","Total #", "% of Total"])
-df_pegs.name = "PEG Enrichment by %"
-
-# -------------------------------------------------------------------------------
-# Phospholipid Enrichment by percent
-# -------------------------------------------------------------------------------
-
-phospholipid_total = [0]*len(phospholipids)
-for bc_x in df_averaged["Phospholipid %"].values:
-	for index in range(len(phospholipids)):
-		if bc_x == phospholipids[index]:
-			phospholipid_total[index] += 1
-			break
-
-phospholipid_percent_total = []
-for each_phospholipid in phospholipid_total:
-	phospholipid_percent_total.append(round(each_phospholipid/total,9))
-
-phospholipids.append("TOTAL")
-phospholipid_total.append(total)
-phospholipid_percent_total.append(round(sum(phospholipid_percent_total)))
-
-t_phospholipids = [phospholipids,phospholipid_total,phospholipid_percent_total]
-np_temporary = np.array(t_phospholipids)
-np_temporary = np_temporary.T
-df_phospholipids = pd.DataFrame(data = np_temporary, columns = ["Phospholipid","Total #", "% of Total"])
-df_phospholipids.name = "Phospholipid Enrichment by %"
-
-# -------------------------------------------------------------------------------
-# Lipomer Enrichment
-# -------------------------------------------------------------------------------
-
-lipomer_list_total = [0]*len(lipomer_list)
-for bc_x in df_averaged["Lipomer"].values:
-	for index in range(len(lipomer_list)):
-		if bc_x == lipomer_list[index]:
-			lipomer_list_total[index] += 1
-			break
-
-lipomer_list_percent_total = []
-for each_lipomer in lipomer_list_total:
-	lipomer_list_percent_total.append(round(each_lipomer/total,9))
-
-lipomer_list.append("TOTAL")
-lipomer_list_total.append(total)
-lipomer_list_percent_total.append(round(sum(lipomer_list_percent_total)))
-
-t_lipomer_list = [lipomer_list,lipomer_list_total,lipomer_list_percent_total]
-np_temporary = np.array(t_lipomer_list)
-np_temporary = np_temporary.T
-df_lipomer_list = pd.DataFrame(data = np_temporary, columns = ["Lipomer","Total #", "% of Total"])
-df_lipomer_list.name = "Lipomer Enrichment"
-
-# -------------------------------------------------------------------------------
-# Cholesterol Enrichment
-# -------------------------------------------------------------------------------
-
-cholesterol_list_total = [0]*len(cholesterol_list)
-for bc_x in df_averaged["Cholesterol"].values:
-	for index in range(len(cholesterol_list)):
-		if bc_x == cholesterol_list[index]:
-			cholesterol_list_total[index] += 1
-			break
-
-cholesterol_list_percent_total = []
-for each_cholesterol in cholesterol_list_total:
-	cholesterol_list_percent_total.append(round(each_cholesterol/total,9))
-
-cholesterol_list.append("TOTAL")
-cholesterol_list_total.append(total)
-cholesterol_list_percent_total.append(round(sum(cholesterol_list_percent_total)))
-
-t_cholesterol_list = [cholesterol_list,cholesterol_list_total,cholesterol_list_percent_total]
-np_temporary = np.array(t_cholesterol_list)
-np_temporary = np_temporary.T
-df_cholesterol_list = pd.DataFrame(data = np_temporary, columns = ["Cholesterol","Total #", "% of Total"])
-df_cholesterol_list.name = "Cholesterol Enrichment"
-
-# -------------------------------------------------------------------------------
-# PEG Enrichment
-# -------------------------------------------------------------------------------
-
-peg_list_total = [0]*len(peg_list)
-for bc_x in df_averaged["PEG"].values:
-	for index in range(len(peg_list)):
-		if bc_x == peg_list[index]:
-			peg_list_total[index] += 1
-			break
-
-peg_list_percent_total = []
-for each_peg in peg_list_total:
-	peg_list_percent_total.append(round(each_peg/total,9))
-
-peg_list.append("TOTAL")
-peg_list_total.append(total)
-peg_list_percent_total.append(round(sum(peg_list_percent_total)))
-
-t_peg_list = [peg_list,peg_list_total,peg_list_percent_total]
-np_temporary = np.array(t_peg_list)
-np_temporary = np_temporary.T
-df_peg_list = pd.DataFrame(data = np_temporary, columns = ["PEG","Total #", "% of Total"])
-df_peg_list.name = "PEG Enrichment"
-
-# -------------------------------------------------------------------------------
-# Phospholipid Enrichment
-# -------------------------------------------------------------------------------
-
-phospholipid_list_total = [0]*len(phospholipid_list)
-for bc_x in df_averaged["Phospholipid"].values:
-	for index in range(len(phospholipid_list)):
-		if bc_x == phospholipid_list[index]:
-			phospholipid_list_total[index] += 1
-			break
-
-phospholipid_list_percent_total = []
-for each_phospholipid in phospholipid_list_total:
-	phospholipid_list_percent_total.append(round(each_phospholipid/total,9))
-
-phospholipid_list.append("TOTAL")
-phospholipid_list_total.append(total)
-phospholipid_list_percent_total.append(round(sum(phospholipid_list_percent_total)))
-
-t_phospholipid_list = [phospholipid_list,phospholipid_list_total,phospholipid_list_percent_total]
-np_temporary = np.array(t_phospholipid_list)
-np_temporary = np_temporary.T
-df_phospholipid_list = pd.DataFrame(data = np_temporary, columns = ["Phospholipid","Total #", "% of Total"])
-df_phospholipid_list.name = "Phospholipid Enrichment"
-
-# -------------------------------------------------------------------------------
-# Formulation Enrichment tables
-# -------------------------------------------------------------------------------
-current_row_1 = 1 # variable to place formulation enrichments by mole ratio
-current_row_2 = 1 # variable to place formulation enrichments by component
-enrichment_sheet = "Enrichment"
-with pd.ExcelWriter(new_file_name, engine = "openpyxl", mode = "a") as writer:
-
-	df_lipomers.to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_1, startcol = 0, index = False)
-	df_lipomer_list.to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_2, startcol = 4, index = False)
-	current_row_1 += len(df_lipomers) + 2
-	current_row_2 += len(df_lipomer_list) + 2
-	df_cholesterols.to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 ,startcol = 0, index = False)
-	df_cholesterol_list.to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = 4, index = False)
-	current_row_1 += len(df_cholesterols) + 2
-	current_row_2 += len(df_cholesterol_list) + 2
-	df_pegs.to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 , startcol = 0, index = False)
-	df_peg_list.to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = 4, index = False)
-	current_row_1 += len(df_pegs) + 2
-	current_row_2 += len(df_peg_list) + 2
-	df_phospholipids.to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 , startcol = 0, index = False)
-	df_phospholipid_list.to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = 4, index = False)
-
-# Add Table labels
-xfile = openpyxl.load_workbook(new_file_name)
-sheet = xfile[enrichment_sheet]
-sheet["A1"] = "Formulation Enrichment Mole Ratio"
-sheet["E1"] = "Formulation Enrichment Component"
-xfile.save(new_file_name)
-
-# -------------------------------------------------------------------------------
-# Sort normalized counts by cell type
-# -------------------------------------------------------------------------------
-
-#f or cell_type in sorted_cells: (if I want to get all)
-cell_type = "VH"
-
-top_10_sheet = "Top 10% " + cell_type
-# get data frame from "Formulation Enrichment" sheet named it: df_averaged
-df_sorted = df_averaged.sort_values(by = cell_type, ascending = False)
-
-
-with pd.ExcelWriter(new_file_name, engine = "openpyxl", mode = "a") as writer:
-	df_sorted.to_excel(writer, sheet_name = top_10_sheet,index = False)
-
-# -------------------------------------------------------------------------------
-# Top and bottom x percent (request user to enter percent)
-# -------------------------------------------------------------------------------
-x_percent = 20 # user input
-total_LNP = len(df_sorted.index) - 2 # subtract two because of naked barcodes
-values_x_percent = math.floor(total_LNP*(x_percent/100))
-
-df_top = df_sorted.loc[range(0, values_x_percent)] # gets top x percent
-df_bottom = df_sorted.loc[range(total_LNP - values_x_percent, total_LNP + 2)] # gets bottom x percent
-
-if "NAKED1" not in df_bottom["LNP"].to_list() and "NAKED2" not in df_bottom["LNP"].to_list():
-	raise NameError("Error: Naked barcodes not on bottom " + str(x_percent) + "% + 2!")
-
-# -------------------------------------------------------------------------------
-# Enrichment Top 10%
-# -------------------------------------------------------------------------------
-lipomers = []
-cholesterols = []
-pegs = []
-phospholipids = []
-lipomer_list = []
-cholesterol_list = []
-peg_list = []
-phospholipid_list = []
-
-for index in range(len(df_top["Lipomer %"].values)):
-	if df_top["Lipomer %"].values[index] not in lipomers:
-		lipomers.append(df_top["Lipomer %"].values[index])
-	if df_top["Cholesterol %"].values[index] not in cholesterols:
-		cholesterols.append(df_top["Cholesterol %"].values[index])
-	if df_top["PEG %"].values[index] not in pegs:
-		pegs.append(df_top["PEG %"].values[index])
-	if df_top["Phospholipid %"].values[index] not in phospholipids:
-		phospholipids.append(df_top["Phospholipid %"].values[index])
-	if df_top["Lipomer"].values[index] not in lipomer_list:
-		lipomer_list.append(df_top["Lipomer"].values[index])
-	if df_top["Cholesterol"].values[index] not in cholesterol_list:
-		cholesterol_list.append(df_top["Cholesterol"].values[index])
-	if df_top["PEG"].values[index] not in peg_list:
-		peg_list.append(df_top["PEG"].values[index])
-	if df_top["Phospholipid"].values[index] not in phospholipid_list:
-		phospholipid_list.append(df_top["Phospholipid"].values[index])
-
-lipomers.sort()
-cholesterols.sort()
-pegs.sort()
-phospholipids.sort()
-lipomer_list.sort()
-cholesterol_list.sort()
-peg_list.sort()
-phospholipid_list.sort()
-
-# -------------------------------------------------------------------------------
-# Lipomer Enrichment by percent
-# -------------------------------------------------------------------------------
-
-lipomer_total = [0]*len(lipomers)
-for bc_x in df_top["Lipomer %"].values:
-	for index in range(len(lipomers)):
-		if bc_x == lipomers[index]:
-			lipomer_total[index] += 1
-			break
-
-total = sum(lipomer_total) #kinda inecessary
-
-lipomer_percent_total = []
-for each_lipomer in lipomer_total:
-	lipomer_percent_total.append(round(each_lipomer/total,9))
-
-lipomers.append("TOTAL")
-lipomer_total.append(total)
-lipomer_percent_total.append(round(sum(lipomer_percent_total)))
-
-t_lipomers = [lipomers,lipomer_total,lipomer_percent_total]
-np_temporary = np.array(t_lipomers)
-np_temporary = np_temporary.T
-df_lipomers = pd.DataFrame(data = np_temporary, columns = ["Lipomer","Total #", "% of Total"])
-df_lipomers.name = "Lipomer Enrichment by %"
+def main():
+	# create excel destination file
+	destination_folder = "/Users/adadelcid/Documents/Python_Enrichment_Project/"
+	destination_file = create_excel_spreadsheet(destination_folder)
+
+	# Import formulation sheet and create dataframe
+	formulations_sheet = "/Users/adadelcid/Documents/Python_Enrichment_Project/Formulation Sheet Copy.xlsx"
+	df_formulations = create_df_formulation_sheet(formulations_sheet, destination_file)
+
+	# Read CSV file and save as dataframe
+	csv_filepath = "/Users/adadelcid/Documents/Python_Enrichment_Project/normcounts copy.csv"
+	df_norm_counts = create_df_norm_counts(csv_filepath, destination_file)
+
+	# Remove outliers from normalized count dataframe
+	df_norm_no_outliers, sample_columns = create_df_norm_no_outliers(df_norm_counts)
+	
+	# Organize sample_columns by cell type
+	sorted_cells = ["VH","VE","VK","VI","SB","ST","SM","SE"]
+	organized_columns, count_repeats = organize_by_cell_type(sample_columns,sorted_cells)
+
+	# Merge formulations and normalized counts data frames
+	df_merged = merge_formulations_and_norm_counts(df_formulations, df_norm_counts, organized_columns, destination_file)
+	
+	# Average sample normalized counts by cell type
+	df_averaged = average_normalized_counts(df_merged, organized_columns, sorted_cells, destination_file)
+
+	# create enrichment tables
+	create_enrichment_tables(destination_file, df_averaged)
+
+	x_percent = 20
+	enrichment_cell_type = ["SE"]
+	top_bottom_enrichment(destination_file, enrichment_cell_type, df_averaged, x_percent)
+
+def top_bottom_enrichment(destination_file, sorted_cells, df_averaged, x_percent):
+	# sort normalized counts by cell type
+	dict_df_sorted = sort_norm_counts(sorted_cells, df_averaged, destination_file)
+	dict_df_top, dict_df_bottom = top_bottom_percent_by_cell_type(dict_df_sorted, x_percent) 
+
+	for cell_type in sorted_cells:
+		top_and_bottom_enrichment_by_cell_type(destination_file, cell_type , dict_df_top, df_averaged, "Top") 
+		top_and_bottom_enrichment_by_cell_type(destination_file, cell_type , dict_df_bottom, df_averaged, "Bottom")
+
+def top_and_bottom_enrichment_by_cell_type(destination_file, cell_type, dict_df_top_bottom, df_averaged, top_or_bottom):
+	df_top_bottom_cell_type = dict_df_top_bottom[cell_type]
+	create_enrichment_tables(destination_file, df_averaged, df_top_bottom_cell_type, cell_type, top_or_bottom)
+
+def top_bottom_percent_by_cell_type(dict_df_sorted, x_percent):
+
+	dict_df_top = {}
+	dict_df_bottom = {}
+
+	for cell_type in dict_df_sorted:
+		df_sorted = dict_df_sorted[cell_type]
+
+		df_top, df_bottom = top_and_bottom_percent(cell_type, df_sorted,x_percent)
+		dict_df_top[cell_type] = df_top
+		dict_df_bottom[cell_type] = df_bottom
+
+	return dict_df_top, dict_df_bottom
+
+def top_and_bottom_percent(cell_type, df_sorted, x_percent):
+	total_LNP = len(df_sorted.index) - 2 # subtract two because of naked barcodes
+	values_x_percent = math.floor(total_LNP*(x_percent/100))
+
+	df_top = df_sorted.loc[range(0, values_x_percent)] # gets top x percent
+	df_bottom = df_sorted.loc[range(total_LNP - values_x_percent, total_LNP + 2)] # gets bottom x percent
+
+	if "NAKED1" not in df_bottom["LNP"].to_list() and "NAKED2" not in df_bottom["LNP"].to_list():
+		raise NameError("Error: Naked barcodes not on bottom " + str(x_percent) + "% + 2!")
+
+	return df_top, df_bottom
+
+def sort_norm_counts(sorted_cells, df_averaged, destination_file):
+	dict_df_sorted = {}
+
+	for cell_type in sorted_cells:
+		df_sorted = sort_norm_counts_by_cell_type(cell_type, df_averaged)
+		dict_df_sorted[cell_type] = df_sorted
+
+	return dict_df_sorted
+
+def sort_norm_counts_by_cell_type(cell_type, df_averaged):
+	
+	# get data frame from "Formulation Enrichment" sheet named it: df_averaged
+	df_sorted = df_averaged.sort_values(by = cell_type, ascending = False, ignore_index = True)
+
+	return df_sorted
+
+def create_enrichment_tables(destination_file, df_averaged, df_top_bottom_cell_type = None, cell_type = None, top_or_bottom = None):
+
+	dict_df_components = get_all_enrichments(df_averaged, df_top_bottom_cell_type)
+
+	current_row_1 = 1 # variable to place formulation enrichments by mole ratio
+	current_row_2 = 1 # variable to place formulation enrichments by component
+	enrichment_sheet = "Form Enrichment"
+	if cell_type is not None:
+		enrichment_sheet += " " + cell_type + " " + top_or_bottom
+	with pd.ExcelWriter(destination_file, engine = "openpyxl", mode = "a") as writer:
+		if df_top_bottom_cell_type is None:
+			df_averaged.to_excel(writer, sheet_name = enrichment_sheet, index = False)
+			off_set = len(df_averaged.columns)
+		else:
+			df_top_bottom_cell_type.to_excel(writer, sheet_name = enrichment_sheet, index = False)
+			off_set = len(df_top_bottom_cell_type.columns)
+		dict_df_components["Lipomer %"].to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_1, startcol = off_set + 2, index = False)
+		dict_df_components["Lipomer"].to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_2, startcol = off_set + 6, index = False)
+		current_row_1 += len(dict_df_components["Lipomer %"]) + 2
+		current_row_2 += len(dict_df_components["Lipomer"]) + 2
+		dict_df_components["Cholesterol %"].to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 ,startcol = off_set + 2, index = False)
+		dict_df_components["Cholesterol"].to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = off_set + 6, index = False)
+		current_row_1 += len(dict_df_components["Cholesterol %"]) + 2
+		current_row_2 += len(dict_df_components["Cholesterol"]) + 2
+		dict_df_components["PEG %"].to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 , startcol = off_set + 2, index = False)
+		dict_df_components["PEG"].to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = len(df_averaged.columns)+ 6, index = False)
+		current_row_1 += len(dict_df_components["PEG %"]) + 2
+		current_row_2 += len(dict_df_components["PEG"]) + 2
+		dict_df_components["Phospholipid %"].to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 , startcol = off_set + 2, index = False)
+		dict_df_components["Phospholipid"].to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = off_set + 6, index = False)
+
+	# Add Table labels
+	# xfile = openpyxl.load_workbook(destination_file)
+	# sheet = xfile[enrichment_sheet]
+	# sheet["A1"] = "Formulation Enrichment Mole Ratio"
+	# sheet["E1"] = "Formulation Enrichment Component"
+	# xfile.save(destination_file) 
+
+def get_all_enrichments(df_averaged, df_top_bottom_cell_type):
+	dict_components = get_lists_of_components(df_averaged)
+	dict_df_components = {"Lipomer %" : None, "Cholesterol %" : None, "PEG %" : None, "Phospholipid %" : None,
+						"Lipomer" : None, "Cholesterol" : None, "PEG" : None, "Phospholipid" : None}
+
+	if df_top_bottom_cell_type is None:
+		for component in dict_df_components:
+			dict_df_components[component] = calculate_enrichment(component, dict_components[component], df_averaged)
+	else:
+		for component in dict_df_components:
+			dict_df_components[component] = calculate_enrichment(component, dict_components[component], df_top_bottom_cell_type)
+
+	return dict_df_components
+
+def calculate_enrichment(component, component_list, df_averaged):
+	component_total = [0]*len(component_list)
+	for bc_x in df_averaged[component].values:
+		for index in range(len(component_list)):
+			if bc_x == component_list[index]:
+				component_total[index] += 1
+				break
+
+	total = sum(component_total)
+
+	component_percent_total = []
+	for each_component in component_total:
+		component_percent_total.append(round(each_component/total,9))
+
+	component_list.append("TOTAL")
+	component_total.append(total)
+	component_percent_total.append(round(sum(component_percent_total)))
+
+	t_component_list = [component_list,	component_total,component_percent_total]
+	np_temporary = np.array(t_component_list)
+	np_temporary = np_temporary.T
+	df_component_list = pd.DataFrame(data = np_temporary, columns = [component,"Total #", "% of Total"])
+
+	return df_component_list	
+
+def get_lists_of_components(df_averaged):
+	'''
+	average_normalized_counts : works with the "retrieve_component_list" function and returns a dictionary with all component mole ratios and types
+		inputs:
+				df_averaged : dataframe with averaged normalized counts by cell type
+		output:
+				dict_components : a dictionary containing list of all the component mole ratios and types
+	'''
+
+	dict_components = {"Lipomer %" : [], "Cholesterol %" : [], "PEG %" : [], "Phospholipid %" : [],
+						"Lipomer" : [], "Cholesterol" : [], "PEG" : [], "Phospholipid" : []}
+
+	for component in dict_components:
+		dict_components[component] = retrieve_component_list(df_averaged, component)
+
+	return dict_components
+
+
+def retrieve_component_list(df_averaged, component):
+	'''
+	retrieve_component_list : returns a list of all the different mole ratios or types of a specific component used
+		inputs:
+				df_averaged : dataframe with averaged normalized counts by cell type
+				component : string of the component in question
+		output:
+				component_list : list of all the different mole ratios or types of a component used
+	'''
+	component_list = []
+
+	for index in range(len(df_averaged[component].values)-2):
+		if df_averaged[component].values[index] not in component_list:
+			component_list.append(df_averaged[component].values[index])
+
+	component_list.sort()
+
+	return component_list
+
+def average_normalized_counts(df_merged, organized_columns, sorted_cells, destination_file):
+	'''
+	average_normalized_counts : creates and returns a dataframe with averaged normalized counts by cell type and appends it to excel spreadsheet
+		inputs:
+				df_merged : dataframe of merged formulations and normalized counts
+				organized_columns : list of samples organized by cell types of sorted cells
+				sorted_cells: user specified list of cells that were sorted
+				destination_file : directory of the excel spreadsheet created
+		output:
+				df_averaged : dataframe with averaged normalized counts by cell type
+	'''
+
+	df_averaged = df_merged # copy merged dataframe
+
+	for index in range(len(sorted_cells)): 
+		temporary_list = []
+		for column in organized_columns: # for each sample
+			if sorted_cells[index] in column: # if sample is specific cell type
+				temporary_list.append(column) # add to temporary list of samples per cell type
+		df_averaged[sorted_cells[index]] = df_averaged[temporary_list].mean(axis=1) # get average of repeats of each cell type and append to dataframe
+
+	#order columns
+	l1 = df_merged.columns.tolist()[:10] # columns up to phospholipid%
+	order_columns = l1 + sorted_cells # formulation columns and cell types
+
+	# rearrange columns on df_averaged
+	df_averaged = df_averaged[order_columns]
+
+	# append merged data frames onto excel spreadsheet
+	with pd.ExcelWriter(destination_file, engine="openpyxl", mode = "a") as writer:
+		df_averaged.to_excel(writer, sheet_name = "Averaged Norm Counts", index = False)
+
+	return df_averaged
+
+def merge_formulations_and_norm_counts(df_formulations, df_norm_counts, organized_columns, destination_file):
+	'''
+	merge_formulations_and_norm_counts : merges formulation and norm count dataframes into single data frame and appends it to excel spreadsheet
+		inputs:
+				df_formulations : formulations datasheet
+				df_norm_counts : data frame of normalized counts
+				organized_columns : list of samples organized by cell types of sorted cells
+				destination_file : directory of the excel spreadsheet created
+		output:
+				df_merged : dataframe of merged formulations and normalized counts
+	'''
+
+	# inner merge of data frames around barcodes ("BC")
+	df_merged = df_formulations.merge(df_norm_counts, on="BC")
+
+	# ordered columns
+	l1 = df_merged.columns.tolist()[:10] # columns up to phospholipid%
+	order_columns = l1 + organized_columns # formulation columns and organized sample columns
+
+	# rearrange columns on df_merged
+	df_merged = df_merged[order_columns]
+
+	# append merged data frames onto excel spreadsheet on a sheet named Formulations + Norm Counts
+	with pd.ExcelWriter(destination_file, engine="openpyxl", mode = "a") as writer:
+		df_merged.to_excel(writer, sheet_name = "Formulations + Norm Counts", index = False)
+
+	return df_merged
+
+def organize_by_cell_type(sample_columns, sorted_cells):
+	'''
+	organize_by_cell_type : gets data fram with normalized counts, creates a dataframe without outliers based on given percentile
+		inputs:
+				sample_columns :  list of the names of the columns on the dataframe of normalized counts with no outliers(names of samples)
+				sorted_cells : user specified list of cells that were sorted
+		output:
+				organized_columns : list of samples organized by cell types of sorted cells
+				count_repeats : number of repeats for each cell type
+	'''
+
+	# organize columns
+	organized_columns = []
+	for cell_type in sorted_cells: 
+		for column in sample_columns:
+			if cell_type in column: # if current cell_type is in the name of the current column (e.g: if "SB" in "AD SB102":)
+				organized_columns.append(column)
+
+	count_repeats = len(sample_columns)//len(sorted_cells) # number of repeats per cell type, should be same for all
+
+	return organized_columns, count_repeats
+
+def create_df_norm_no_outliers(df_norm_counts, percentile = 99.9):
+	'''
+	create_df_norm_no_outliers: gets data fram with normalized counts, creates a dataframe without outliers based on given percentile
+		inputs:
+				df_norm_counts :  data frame of normalized counts
+				percentile : percentile of values accepted (default = 99.9%)
+		output:
+				df_norm_no_outliers : data frame with normalized counts without outliers
+				sample_columns : list of the names of the columns on the dataframe (names of samples)
+	'''
+
+	# get row names and save barcode column
+	rows = list(df_norm_counts.index)
+	barcodes = df_norm_counts["BC"]
+
+	# calculate given percentile
+	df_norm_no_outliers = df_norm_counts.drop("BC",axis = 1) # temporarily remove barcode column
+	n_at_percentile = np.percentile(df_norm_no_outliers.to_numpy(),percentile) # find 99.9 percentile value
+
+	# set outliers to NaN (numbers greater than 99.9 percentile)
+	sample_columns = df_norm_no_outliers.columns.tolist() # get columns names again, because we changed a column's name
+	for row in rows:
+		for column in sample_columns:
+			if df_norm_no_outliers.at[row,column] >= n_at_percentile: # if value at location [row,column] if greater (outlier)
+				df_norm_no_outliers.at[row,column] = np.nan # set value to NaN
+
+	df_norm_no_outliers.insert(loc=0,column = "BC", value = barcodes) # add the BC column again
+
+	return df_norm_no_outliers, sample_columns
+
+def create_df_norm_counts(csv_filepath, destination_file):
+	'''
+	create_df_norm_counts: gets csv file path with normalized counts, creates a dataframe and appends
+	it to destination_file
+		inputs:
+				csv_filepath : file path to csv file
+				destination_file :  name of the destination excel file
+		output:
+				df_norm_counts : data frame with normalized counts
+	'''
+	new_sheet_name = "Normalized Counts"
+
+	# Read CSV file and save as data frame
+	df_norm_counts = pd.read_csv(csv_filepath,sep = ',',header= 0)
+
+	columns = df_norm_counts.columns.tolist() # get names of columns
+	df_norm_counts.rename(columns={columns[0]:"BC"}, inplace=True) #rename first column to BC for barcodes
+
+	# Copy csv data frame to excel sheet
+	with pd.ExcelWriter(destination_file,engine="openpyxl",mode = "a") as writer:
+		df_norm_counts.to_excel(writer, sheet_name = new_sheet_name, index = False)
+
+	return df_norm_counts
+
+def create_df_formulation_sheet(formulations_sheet, destination_file):
+	'''
+	create_df_formulation_sheet: gets formulation sheet, creates a dataframe and appends it to destination_file
+		inputs:
+				formulations_sheet: file path to excel sheet of formulation sheet
+				destination_file : name of the destination excel file
+		output:
+				df_formulations : data frame with formulations sheet
+	'''
+
+	# Turn formulation sheet into data frames
+	df_formulations = pd.read_excel(formulations_sheet, sheet_name = "Formulations")
+
+	# Make spreadsheet with formulation sheet
+	with pd.ExcelWriter(destination_file,engine="openpyxl",mode = "w") as writer:
+		df_formulations.to_excel(writer, sheet_name = "Formulations", index = False)
+
+	return df_formulations
+
+def create_excel_spreadsheet(destination_folder, file_name = "Normalized_Counts"):
+	'''
+	create_excel_spreadsheet: creates an excel spreadsheet
+		inputs:
+				destination_folder : directory of the folder where the user wants the file stored
+				file_name : name of the file being created (default = "Normalized_Counts")
+		output:
+				destination_file : directory of the excel spreadsheet created
+	'''
+	
+	destination_file = destination_folder + file_name + ".xlsx"
+	wb = Workbook()
+	wb.save(destination_file)
+
+	return destination_file
+
+if __name__ == "__main__":
+	main()
