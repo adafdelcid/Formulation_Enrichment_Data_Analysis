@@ -5,7 +5,7 @@ Oct.2020
 
 CSV2Excel: Converts a CSV file from sequenced samples into an excel spreadsheet. Takes in formulation sheet
 with the standard formatting of the Dahlman Lab. Lastly, performs enrichment analysis by formulation
-composition and cell type.
+composition and specified cell type.
 '''
 import pandas as pd
 import numpy as np
@@ -14,23 +14,43 @@ from openpyxl import Workbook
 import math
 
 def main():
-	# create excel destination file
+
+	# User inputs (only provide these values DO NOT change anything else on the code to prevent code from breaking)
+	# Note the formulations sheet must be on a sheet with name "Formulations", otherwise error will occur
 	destination_folder = "/Users/adadelcid/Documents/Python_Enrichment_Project/"
+	formulations_sheet = "/Users/adadelcid/Documents/Python_Enrichment_Project/Formulation Sheet Copy.xlsx"
+	csv_filepath = "/Users/adadelcid/Documents/Python_Enrichment_Project/normcounts copy.csv"
+	sorted_cells = ["VH","VE","VK","VI","SB","ST","SM","SE"]
+	x_percent = 20
+	cell_type = "SE"
+
+	# Do not edit anything past this line
+	run_enrichment_analysis(destination_folder, formulations_sheet, csv_filepath, sorted_cells, x_percent, cell_type)
+
+def run_enrichment_analysis(destination_folder, formulations_sheet, csv_filepath, sorted_cells, x_percent, cell_type):
+	'''
+	run_enrichment_analysis : driver function, it uses all other functions to create enrichment analysis
+		inputs:
+				destination_folder : user specified path to the folder where the user wants the excel file created to be saved
+				formulations_sheet : user specified file path to excel spreadsheet with formulation sheet only
+				csv_filepath : user specified file path to csv with normalized counts
+				sorted_cells : user specified list of cells that were sorted
+				x_percent : user specified integer to find top and bottom performing LNPs (0-100)
+				cell_type : user specified cell type to sort by
+	'''
+	# create excel destination file
 	destination_file = create_excel_spreadsheet(destination_folder)
 
 	# Import formulation sheet and create dataframe
-	formulations_sheet = "/Users/adadelcid/Documents/Python_Enrichment_Project/Formulation Sheet Copy.xlsx"
 	df_formulations = create_df_formulation_sheet(formulations_sheet, destination_file)
 
 	# Read CSV file and save as dataframe
-	csv_filepath = "/Users/adadelcid/Documents/Python_Enrichment_Project/normcounts copy.csv"
 	df_norm_counts = create_df_norm_counts(csv_filepath, destination_file)
 
 	# Remove outliers from normalized count dataframe
 	df_norm_no_outliers, sample_columns = create_df_norm_no_outliers(df_norm_counts)
 	
 	# Organize sample_columns by cell type
-	sorted_cells = ["VH","VE","VK","VI","SB","ST","SM","SE"]
 	organized_columns, count_repeats = organize_by_cell_type(sample_columns,sorted_cells)
 
 	# Merge formulations and normalized counts data frames
@@ -40,40 +60,194 @@ def main():
 	df_averaged = average_normalized_counts(df_merged, organized_columns, sorted_cells, destination_file)
 
 	# create enrichment tables
-	create_enrichment_tables(destination_file, df_averaged)
+	dict_df_components_averaged = create_enrichment_tables(destination_file, df_averaged)
 
-	x_percent = 20
-	enrichment_cell_type = ["SE"]
-	top_bottom_enrichment(destination_file, enrichment_cell_type, df_averaged, x_percent)
+	# create top and bottom x_percent enrichment tables by specified cell type
+	dict_df_components_top, dict_df_components_bottom = top_bottom_enrichment(destination_file, cell_type, df_averaged, x_percent)
 
-def top_bottom_enrichment(destination_file, sorted_cells, df_averaged, x_percent):
+	# create net enrichment factor sheet
+	create_net_enrichment_factor(destination_file, dict_df_components_averaged, dict_df_components_top, dict_df_components_bottom, cell_type)
+
+	#create sheet with top/winning LNPs
+	winning_LNPs(cell_type, df_averaged, x_percent, destination_file)
+
+	
+def winning_LNPs(cell_type, df_averaged, x_percent, destination_file):
+	'''
+	winning_LNPs: creates excel sheet with formulations and normalized counts of top performing LNPs named " Winning LNPS" + cell_type
+		inputs:
+				cell_type : user specified cell type to sort by
+				df_averaged : dataframe with averaged normalized counts by cell type
+				x_percent : user specified integer to find top and bottom performing LNPs (0-100)
+				destination_file : directory of the excel spreadsheet
+	'''
+
+	df_sorted = sort_norm_counts(cell_type, df_averaged)
+	df_top, df_bottom = top_and_bottom_percent(cell_type, df_sorted, x_percent)
+
+	winning_LNP_sheet = "Winning LNPs " + cell_type
+	with pd.ExcelWriter(destination_file, engine = "openpyxl", mode = "a") as writer:
+		df_top.to_excel(writer, sheet_name = winning_LNP_sheet, index = False)
+
+def create_net_enrichment_factor(destination_file, dict_df_components_averaged, dict_df_components_top, dict_df_components_bottom, cell_type):
+	'''
+	create_net_enrichment_factor: creates excel sheet with all enrichment analysis (averaged, top, bottom, raw enrichment and net enrichment factor) named "Net Enrichment Factors"
+		inputs:
+				destination_file : directory of the excel spreadsheet
+				dict_df_components_averaged : dictionary with all dataframes of all enrichment calculations of df_averaged
+				dict_df_components_top : dictionary with all dataframes of all enrichment calculations of df_top
+				dict_df_components_bottom : dictionary with all dataframes of all enrichment calculations of df_bottom
+				cell_type : user specified cell type to sort by
+	'''
+
+	dict_df_component_net_enrichment_factor, dict_raw_enrichment_top, dict_raw_enrichment_bottom = net_enrichment_factor(dict_df_components_averaged, dict_df_components_top, dict_df_components_bottom, cell_type)
+	dict_df_raw_enrichment_top = dict_list_to_dict_df(dict_raw_enrichment_top, cell_type)
+	dict_df_raw_enrichment_bottom = dict_list_to_dict_df(dict_raw_enrichment_bottom, cell_type)
+	current_row = 1 # variable to place formulation enrichments by mole ratio
+	net_enrichment_sheet = "Net Enrichment Factors " + cell_type 
+	
+	list_enrichments = ["Lipomer %", "Cholesterol %", "PEG %", "Phospholipid %", "Lipomer", "Cholesterol", "PEG", "Phospholipid"]
+
+	with pd.ExcelWriter(destination_file, engine = "openpyxl", mode = "a") as writer:
+
+		for item in list_enrichments:
+			dict_df_components_averaged[item].to_excel(writer, sheet_name = net_enrichment_sheet, startrow = current_row, startcol = 0, index = False)
+			dict_df_components_top[item].to_excel(writer, sheet_name = net_enrichment_sheet, startrow = current_row, startcol = 4, index = False)
+			dict_df_raw_enrichment_top[item].to_excel(writer, sheet_name = net_enrichment_sheet, startrow = current_row, startcol = 8, index = False)
+			dict_df_components_bottom[item].to_excel(writer, sheet_name = net_enrichment_sheet, startrow = current_row, startcol = 11, index = False)
+			dict_df_raw_enrichment_bottom[item].to_excel(writer, sheet_name = net_enrichment_sheet, startrow = current_row, startcol = 15, index = False)
+			dict_df_component_net_enrichment_factor[item].to_excel(writer, sheet_name = net_enrichment_sheet, startrow = current_row, startcol = 18, index = False)
+			current_row += len(dict_df_components_averaged[item]) + 2
+
+	xfile = openpyxl.load_workbook(destination_file)
+	sheet = xfile[net_enrichment_sheet]
+	sheet["A1"] = "Formulation Enrichment"
+	sheet["E1"] = "Top"
+	sheet["I1"] = "Enrichment Factor Top"
+	sheet["L1"] = "Bottom"
+	sheet["P1"] = "Enrichment Factor Bottom"
+	sheet["S1"] = "Net Enrichment Factor"
+	xfile.save(destination_file)
+
+def dict_list_to_dict_df(dict_list,cell_type):
+	'''
+	dict_list_to_dict_df: converts dictionary with lists to dictionary with dataframes
+		inputs:
+				dict_list: dictionary containing lists
+				cell_type : user specified cell type to sort by
+		output:
+				dict_df : dictionary with dataframes
+	'''
+
+	dict_df ={}
+	for component in dict_list:
+		np_temporary = np.array(dict_list[component])
+		dict_df[component] = pd.DataFrame(data = np_temporary, columns = [component, cell_type])
+
+	return dict_df
+
+def net_enrichment_factor(dict_df_components_averaged, dict_df_components_top, dict_df_components_bottom, cell_type):
+	'''
+	net_enrichment_factor: creates dataframes for best and worst performing LNPs, counts and their formulations
+		inputs:
+				dict_df_components_averaged : dictionary with all dataframes of all enrichment calculations of df_averaged
+				dict_df_components_top : dictionary with all dataframes of all enrichment calculations of df_top
+				dict_df_components_bottom : dictionary with all dataframes of all enrichment calculations of df_bottom
+				cell_type : user specified cell type to sort by
+		output:
+				dict_df_component_net_enrichment_factor : dictionary with dataframes of net enrichment factors by component type or mole ratio
+				dict_raw_enrichment_factors_top : dictionary with dataframes of raw enrichment of top performing LNPs
+				dict_raw_enrichment_factors_bottom : dictionary with dataframes of raw enrichment of bottom performing LNPs
+	'''
+
+	dict_component_net_enrichment_factor ={}
+
+	dict_raw_enrichment_factors_top = raw_enrichment_factor(dict_df_components_averaged, dict_df_components_top)
+	dict_raw_enrichment_factors_bottom = raw_enrichment_factor(dict_df_components_averaged, dict_df_components_bottom)
+
+	for component in dict_raw_enrichment_factors_top:
+		temporary_list = []
+		for index in range(len(dict_raw_enrichment_factors_top[component])):
+			enrichment_factor_row_top = dict_raw_enrichment_factors_top[component][index]
+			enrichment_factor_row_bottom = dict_raw_enrichment_factors_bottom[component][index]
+			
+			item = [enrichment_factor_row_top[0], round(enrichment_factor_row_top[1] - enrichment_factor_row_bottom[1],9)]
+			temporary_list.append(item)
+
+		dict_component_net_enrichment_factor[component] = temporary_list
+	
+	dict_df_component_net_enrichment_factor = {"Lipomer %" : None, "Cholesterol %" : None, "PEG %" : None, "Phospholipid %" : None,
+						"Lipomer" : None, "Cholesterol" : None, "PEG" : None, "Phospholipid" : None}
+
+	for component in dict_component_net_enrichment_factor:
+		np_temporary = np.array(dict_component_net_enrichment_factor[component])
+		dict_df_component_net_enrichment_factor[component] = pd.DataFrame(data = np_temporary, columns = [component, cell_type])
+
+	return dict_df_component_net_enrichment_factor, dict_raw_enrichment_factors_top, dict_raw_enrichment_factors_bottom
+
+def raw_enrichment_factor(dict_df_components_averaged, dict_df_components_top_bottom):
+	'''
+	raw_enrichment_factor: creates dataframes for best and worst performing LNPs, counts and their formulations
+		inputs:
+				dict_df_components_averaged : dictionary with all dataframes of all enrichment calculations of df_averaged
+				dict_df_components_top_bottom : dictionary with all dataframes of all enrichment calculations of df_top_bottom_cell_type
+		output:
+				dict_raw_enrichment_factors : dictionary with lists of all raw enrichment factors
+	'''
+
+	dict_components_averaged = {}
+	dict_components_top_bottom = {}
+	dict_raw_enrichment_factors = {}
+
+	for component in dict_df_components_averaged:
+		dict_components_averaged[component] = dict_df_components_averaged[component].values.tolist()
+		dict_components_top_bottom[component] = dict_df_components_top_bottom[component].values.tolist()
+
+		temporary_list = []
+		for index in range(len(dict_components_averaged[component])):
+			averaged_row = dict_components_averaged[component][index]
+			top_bottom_row = dict_components_top_bottom[component][index]
+			item = [averaged_row[0], round(float(top_bottom_row[2])/float(averaged_row[2]),9)]
+			temporary_list.append(item)
+
+		dict_raw_enrichment_factors[component] = temporary_list
+
+	return dict_raw_enrichment_factors
+
+def top_bottom_enrichment(destination_file, cell_type, df_averaged, x_percent):
+	'''
+	top_bottom_enrichment: creates dataframes for best and worst performing LNPs, counts and their formulations
+		inputs:
+				destination_file : directory of the excel spreadsheet
+				cell_type : user specified cell type to sort by
+				df_averaged : dataframe with averaged normalized counts by cell type
+				x_percent : user specified integer to find top and bottom performing LNPs (0-100)
+		output:
+				dict_df_components_top : dictionary containing dataframes with enrichment analysis of top performing LNPs
+				dict_df_components_bottom : dictionary containing dataframes with enrichment analysis of bottom performing LNPs
+	'''
+
 	# sort normalized counts by cell type
-	dict_df_sorted = sort_norm_counts(sorted_cells, df_averaged, destination_file)
-	dict_df_top, dict_df_bottom = top_bottom_percent_by_cell_type(dict_df_sorted, x_percent) 
+	df_sorted = sort_norm_counts(cell_type, df_averaged)
+	df_top, df_bottom = top_and_bottom_percent(cell_type, df_sorted, x_percent) 
 
-	for cell_type in sorted_cells:
-		top_and_bottom_enrichment_by_cell_type(destination_file, cell_type , dict_df_top, df_averaged, "Top") 
-		top_and_bottom_enrichment_by_cell_type(destination_file, cell_type , dict_df_bottom, df_averaged, "Bottom")
+	dict_df_components_top = create_enrichment_tables(destination_file, df_averaged,  df_top, cell_type, "Top") 
+	dict_df_components_bottom = create_enrichment_tables(destination_file, df_averaged, df_bottom, cell_type, "Bottom")
 
-def top_and_bottom_enrichment_by_cell_type(destination_file, cell_type, dict_df_top_bottom, df_averaged, top_or_bottom):
-	df_top_bottom_cell_type = dict_df_top_bottom[cell_type]
-	create_enrichment_tables(destination_file, df_averaged, df_top_bottom_cell_type, cell_type, top_or_bottom)
-
-def top_bottom_percent_by_cell_type(dict_df_sorted, x_percent):
-
-	dict_df_top = {}
-	dict_df_bottom = {}
-
-	for cell_type in dict_df_sorted:
-		df_sorted = dict_df_sorted[cell_type]
-
-		df_top, df_bottom = top_and_bottom_percent(cell_type, df_sorted,x_percent)
-		dict_df_top[cell_type] = df_top
-		dict_df_bottom[cell_type] = df_bottom
-
-	return dict_df_top, dict_df_bottom
+	return dict_df_components_top, dict_df_components_bottom
 
 def top_and_bottom_percent(cell_type, df_sorted, x_percent):
+	'''
+	top_and_bottom_percent: creates dataframes for best and worst performing LNPs, counts and their formulations
+		inputs:
+				cell_type : user specified cell type to sort by
+				df_sorted : dataframe with normalized counts sorted in descending order by specified cell type
+				x_percent : user specified integer to find top and bottom performing LNPs (0-100)
+		output:
+				df_top : dataframe top performing LNPs 
+				df_bottom : dataframe bottom performing LNPs
+	'''
+
 	total_LNP = len(df_sorted.index) - 2 # subtract two because of naked barcodes
 	values_x_percent = math.floor(total_LNP*(x_percent/100))
 
@@ -85,23 +259,33 @@ def top_and_bottom_percent(cell_type, df_sorted, x_percent):
 
 	return df_top, df_bottom
 
-def sort_norm_counts(sorted_cells, df_averaged, destination_file):
-	dict_df_sorted = {}
+def sort_norm_counts(cell_type, df_averaged):
+	'''
+	sort_norm_counts: creates dataframe with normalized counts sorted in descending order by specified cell type
+		inputs:
+				cell_type : user specified cell type to sort by
+				df_averaged : dataframe with averaged normalized counts by cell type
+		output:
+				df_sorted : dataframe with normalized counts sorted in descending order by specified cell type
+	'''
 
-	for cell_type in sorted_cells:
-		df_sorted = sort_norm_counts_by_cell_type(cell_type, df_averaged)
-		dict_df_sorted[cell_type] = df_sorted
-
-	return dict_df_sorted
-
-def sort_norm_counts_by_cell_type(cell_type, df_averaged):
-	
-	# get data frame from "Formulation Enrichment" sheet named it: df_averaged
 	df_sorted = df_averaged.sort_values(by = cell_type, ascending = False, ignore_index = True)
 
 	return df_sorted
 
 def create_enrichment_tables(destination_file, df_averaged, df_top_bottom_cell_type = None, cell_type = None, top_or_bottom = None):
+	'''
+	create_enrichment_tables: creates excel sheet with formulation enrichment tables of averaged normalized counts (top or bottom performing LNPs if df_top_bottom_cell_type value is passed)
+							named "Form Enrichment" (or "Form Enrichment" + cell_type + top_or_bottom if df_top_bottom_cell_type provided)
+		inputs:
+				destination_file : directory of the excel spreadsheet
+				df_averaged : dataframe with averaged normalized counts by cell type
+				df_top_bottom_cell_type : dataframe of either top or bottom performing LNPs by specified cell type (default = None)
+				cell_type : user specified cell type to sort by (default = None)
+				top_or_bottom : specifies if enrichment is for top or bottom performing LNPs by specified cell type(default = None)
+		output:
+				dict_df_components : dictionary with all data frames of all enrichment calculations of df_averaged (or df_top_bottom_cell_type if inputted)
+	'''
 
 	dict_df_components = get_all_enrichments(df_averaged, df_top_bottom_cell_type)
 
@@ -115,31 +299,30 @@ def create_enrichment_tables(destination_file, df_averaged, df_top_bottom_cell_t
 			df_averaged.to_excel(writer, sheet_name = enrichment_sheet, index = False)
 			off_set = len(df_averaged.columns)
 		else:
-			df_top_bottom_cell_type.to_excel(writer, sheet_name = enrichment_sheet, index = False)
-			off_set = len(df_top_bottom_cell_type.columns)
-		dict_df_components["Lipomer %"].to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_1, startcol = off_set + 2, index = False)
-		dict_df_components["Lipomer"].to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_2, startcol = off_set + 6, index = False)
-		current_row_1 += len(dict_df_components["Lipomer %"]) + 2
-		current_row_2 += len(dict_df_components["Lipomer"]) + 2
-		dict_df_components["Cholesterol %"].to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 ,startcol = off_set + 2, index = False)
-		dict_df_components["Cholesterol"].to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = off_set + 6, index = False)
-		current_row_1 += len(dict_df_components["Cholesterol %"]) + 2
-		current_row_2 += len(dict_df_components["Cholesterol"]) + 2
-		dict_df_components["PEG %"].to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 , startcol = off_set + 2, index = False)
-		dict_df_components["PEG"].to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = len(df_averaged.columns)+ 6, index = False)
-		current_row_1 += len(dict_df_components["PEG %"]) + 2
-		current_row_2 += len(dict_df_components["PEG"]) + 2
-		dict_df_components["Phospholipid %"].to_excel(writer, sheet_name = enrichment_sheet, startrow =current_row_1 , startcol = off_set + 2, index = False)
-		dict_df_components["Phospholipid"].to_excel(writer, sheet_name = enrichment_sheet, startrow=current_row_2, startcol = off_set + 6, index = False)
+			df_sorted_by_cell_type = sort_norm_counts(cell_type, df_averaged)
+			df_sorted_by_cell_type.to_excel(writer, sheet_name = enrichment_sheet, index = False)
+			off_set = len(df_sorted_by_cell_type.columns)
 
-	# Add Table labels
-	# xfile = openpyxl.load_workbook(destination_file)
-	# sheet = xfile[enrichment_sheet]
-	# sheet["A1"] = "Formulation Enrichment Mole Ratio"
-	# sheet["E1"] = "Formulation Enrichment Component"
-	# xfile.save(destination_file) 
+		list_enrichments = ["Lipomer %", "Cholesterol %", "PEG %", "Phospholipid %", "Lipomer", "Cholesterol", "PEG", "Phospholipid"]
+
+		for index in range(len(list_enrichments)//2):
+			dict_df_components[list_enrichments[index]].to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_1, startcol = off_set + 2, index = False)
+			dict_df_components[list_enrichments[index + 4]].to_excel(writer, sheet_name = enrichment_sheet, startrow = current_row_2, startcol = off_set + 6, index = False)
+			current_row_1 += len(dict_df_components[list_enrichments[index]]) + 2
+			current_row_2 += len(dict_df_components[list_enrichments[index + 4]]) + 2
+
+	return dict_df_components
 
 def get_all_enrichments(df_averaged, df_top_bottom_cell_type):
+	'''
+	get_all_enrichments: calculated enrichment by component or component_ratio
+		inputs:
+				df_averaged : dataframe with averaged normalized counts by cell type
+				df_top_bottom_cell_type : dataframe of either top or bottom performing LNPs by specified cell_type (optional input)
+		output:
+				dict_df_components : dictionary with all dataframes of all enrichment calculations of df_averaged (or df_top_bottom_cell_type if inputted)
+	'''
+
 	dict_components = get_lists_of_components(df_averaged)
 	dict_df_components = {"Lipomer %" : None, "Cholesterol %" : None, "PEG %" : None, "Phospholipid %" : None,
 						"Lipomer" : None, "Cholesterol" : None, "PEG" : None, "Phospholipid" : None}
@@ -154,6 +337,16 @@ def get_all_enrichments(df_averaged, df_top_bottom_cell_type):
 	return dict_df_components
 
 def calculate_enrichment(component, component_list, df_averaged):
+	'''
+	calculate_enrichment: calculated enrichment by component or component_ratio
+		inputs:
+				component : component or component ratio
+				component_list : list of all component types and component ratios specified component
+				df_averaged : dataframe with averaged normalized counts by cell type
+		output:
+				df_component_list : dataframe of enrichment for specified component
+	'''
+
 	component_total = [0]*len(component_list)
 	for bc_x in df_averaged[component].values:
 		for index in range(len(component_list)):
@@ -180,7 +373,7 @@ def calculate_enrichment(component, component_list, df_averaged):
 
 def get_lists_of_components(df_averaged):
 	'''
-	average_normalized_counts : works with the "retrieve_component_list" function and returns a dictionary with all component mole ratios and types
+	get_lists_of_components : works with the "retrieve_component_list" function and returns a dictionary with all component mole ratios and component types
 		inputs:
 				df_averaged : dataframe with averaged normalized counts by cell type
 		output:
@@ -217,7 +410,7 @@ def retrieve_component_list(df_averaged, component):
 
 def average_normalized_counts(df_merged, organized_columns, sorted_cells, destination_file):
 	'''
-	average_normalized_counts : creates and returns a dataframe with averaged normalized counts by cell type and appends it to excel spreadsheet
+	average_normalized_counts : creates and returns a dataframe with averaged normalized counts by cell type and appends it to excel spreadsheet on a sheet named "Averaged Norm Counts"
 		inputs:
 				df_merged : dataframe of merged formulations and normalized counts
 				organized_columns : list of samples organized by cell types of sorted cells
@@ -251,7 +444,7 @@ def average_normalized_counts(df_merged, organized_columns, sorted_cells, destin
 
 def merge_formulations_and_norm_counts(df_formulations, df_norm_counts, organized_columns, destination_file):
 	'''
-	merge_formulations_and_norm_counts : merges formulation and norm count dataframes into single data frame and appends it to excel spreadsheet
+	merge_formulations_and_norm_counts : merges formulation and norm count dataframes into single data frame and appends it to excel spreadsheet named "Formulations + Norm Counts"
 		inputs:
 				df_formulations : formulations datasheet
 				df_norm_counts : data frame of normalized counts
@@ -331,8 +524,7 @@ def create_df_norm_no_outliers(df_norm_counts, percentile = 99.9):
 
 def create_df_norm_counts(csv_filepath, destination_file):
 	'''
-	create_df_norm_counts: gets csv file path with normalized counts, creates a dataframe and appends
-	it to destination_file
+	create_df_norm_counts: gets csv file path with normalized counts, creates a dataframe and appends it to destination_file on a sheet named "Normalized Counts"
 		inputs:
 				csv_filepath : file path to csv file
 				destination_file :  name of the destination excel file
@@ -355,9 +547,9 @@ def create_df_norm_counts(csv_filepath, destination_file):
 
 def create_df_formulation_sheet(formulations_sheet, destination_file):
 	'''
-	create_df_formulation_sheet: gets formulation sheet, creates a dataframe and appends it to destination_file
+	create_df_formulation_sheet : gets formulation sheet, creates a dataframe and appends it to destination_file on a sheet named " Formulations"
 		inputs:
-				formulations_sheet: file path to excel sheet of formulation sheet
+				formulations_sheet : file path to excel sheet of formulation sheet
 				destination_file : name of the destination excel file
 		output:
 				df_formulations : data frame with formulations sheet
@@ -372,12 +564,12 @@ def create_df_formulation_sheet(formulations_sheet, destination_file):
 
 	return df_formulations
 
-def create_excel_spreadsheet(destination_folder, file_name = "Normalized_Counts"):
+def create_excel_spreadsheet(destination_folder, file_name = "Enrichment Analysis"):
 	'''
 	create_excel_spreadsheet: creates an excel spreadsheet
 		inputs:
 				destination_folder : directory of the folder where the user wants the file stored
-				file_name : name of the file being created (default = "Normalized_Counts")
+				file_name : name of the file being created (default = "Enrichment Analysis")
 		output:
 				destination_file : directory of the excel spreadsheet created
 	'''
