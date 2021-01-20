@@ -13,7 +13,7 @@ import openpyxl
 from openpyxl import Workbook
 import math
 
-def main():
+'''def main():
 
 	# User inputs (only provide these values DO NOT change anything else on the code to prevent code from breaking)
 	# Note the formulations sheet must be on a sheet with name "Formulations", otherwise error will occur
@@ -26,7 +26,7 @@ def main():
 	cell_type = "SE"
 
 	# Do not edit anything past this line
-	run_enrichment_analysis(destination_folder, formulations_sheet, csv_filepath, sorted_cells, x_percent, cell_type)
+	run_enrichment_analysis(destination_folder, formulations_sheet, csv_filepath, sorted_cells, x_percent, cell_type)'''
 
 def run_enrichment_analysis(destination_folder, formulations_sheet, csv_filepath, sorted_cells, x_percent, cell_type, percentile = 99.9):
 	'''
@@ -39,6 +39,10 @@ def run_enrichment_analysis(destination_folder, formulations_sheet, csv_filepath
 				x_percent : user specified integer to find top and bottom performing LNPs (0-100)
 				cell_type : user specified cell type to sort by
 	'''
+	# check if no input (reset to 99.9)
+	if percentile == 0.0:
+		percentile = 99.9
+
 	# create excel destination file
 	destination_file = create_excel_spreadsheet(destination_folder)
 
@@ -583,5 +587,5 @@ def create_excel_spreadsheet(destination_folder, file_name = "Enrichment Analysi
 
 	return destination_file
 
-if __name__ == "__main__":
-	main()
+'''if __name__ == "__main__":
+	main()'''
