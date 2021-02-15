@@ -6,6 +6,7 @@ Jan.2021
 Enrichment_interface: Graphical user interface (GUI) for CSV2Excel_Functionalized.py
 '''
 from tkinter import *
+from tkinter import filedialog
 import os.path
 from os import path
 import CSV2Excel_Functionalized
@@ -27,10 +28,18 @@ ct = StringVar()  # Cell Type
 def exit1():
 	exit()
 
+def open_excel_file():
+	global fsp
+	fsp = filedialog.askopenfilename()
+
+def open_csv_file():
+	global ncp
+	ncp = filedialog.askopenfilename()
+
 def enrichment_analysis():
 
-	var1 = fsp.get() # Formulation Sheet file Path
-	var2 = ncp.get() # Normalized Counts file Path
+	var1 = fsp # Formulation Sheet file Path
+	var2 = ncp # Normalized Counts file Path
 	var3 = sc.get()  # list of Sorted Cells
 	var4 = dfp.get() # Destination Folder Path
 	var5 = tbp.get() # Top/Bottom Percent
@@ -128,13 +137,17 @@ def remove_spaces(string1):
 def path_exists(path1):
 	return path.exists(path1)
 
+#photo1 = PhotoImage(file = r"C:")
+
 label1 = Label(root,text = "Enrichment Analysis",  relief = "solid", font = ("arial",16,"bold")).pack()
 
 label2 = Label(root,text = "Formulation Sheet File Path", font = ("arial",12,"bold")).place(x = 20, y = 50)
-entry2 = Entry(root, textvariable=fsp).place(x = 370, y = 48)
+#entry2 = Entry(root, textvariable=fsp).place(x = 370, y = 48)
+entry2 = Button(root, text = "Formulation sheet file", width = 20, fg = "green", font = ("arial",16), command = open_excel_file).place(x = 370, y = 48)
 
 label3 = Label(root,text = "Normalized Counts CSV File Path", font = ("arial",12,"bold")).place(x = 20, y = 82)
-entry3 = Entry(root, textvariable=ncp).place(x = 370, y = 80)
+#entry3 = Entry(root, textvariable=ncp).place(x = 370, y = 80)
+entry2 = Button(root, text = "Normalized counts file", width = 20, fg = "green", font = ("arial",16), command = open_csv_file).place(x = 370, y = 80)
 
 label4 = Label(root,text = "List of Sorted Cells (separate by commas)", font = ("arial",12,"bold")).place(x = 20, y = 114)
 entry4 = Entry(root, textvariable=sc).place(x = 370, y = 112)
