@@ -11,8 +11,7 @@ Script that performs enrichment analysis from a screen given formulation sheet a
 2) Run file
 'python3 Enrichment_interface.py'
 
-## ToDo
+## To-Do
 1) Tests
 	* create test files
 	* write tests
-2) Sorting by organ and average across organs
