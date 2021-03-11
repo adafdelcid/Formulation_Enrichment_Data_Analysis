@@ -33,7 +33,7 @@ def run_enrichment_analysis(destination_folder, formulations_sheet, csv_filepath
         percentile = 99.9
 
     # create excel destination file
-    destination_file = create_excel_spreadsheet(destination_folder, sort_by)
+    destination_file = create_excel_spreadsheet(destination_folder + "/", sort_by) #added "+ '/'"
 
     # Import formulation sheet and create dataframe
     df_formulations = create_df_formulation_sheet(formulations_sheet, destination_file)
@@ -144,7 +144,7 @@ def create_net_enrichment_factor(destination_file, d_df_components_averaged,\
     sheet["E1"] = "Top"
     sheet["I1"] = "Enrichment Factor Top"
     sheet["L1"] = "Bottom"
-    sheet["P1"] = "Enrichment Factor Bottom"
+    sheet["P1"] = "Depletion Factor Bottom"
     sheet["S1"] = "Net Enrichment Factor"
     xfile.save(destination_file)
 
