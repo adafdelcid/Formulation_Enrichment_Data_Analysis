@@ -145,8 +145,6 @@ class MyGUI: # pylint: disable=too-many-instance-attributes
 
         cell_types = string_to_list(self.sc.get()) # list of cell types
         sort_by = get_cell_type(temp_opt, temp_org, temp_ct) # cell type to base analysis
-        print(sort_by)
-        print(cell_types)
         fold_path = self.dfp.get() # Destination Folder Path
         percent = self.tbp.get() # Top/Bottom Percent
         percentile = self.op.get()  # Outliers Percentile
