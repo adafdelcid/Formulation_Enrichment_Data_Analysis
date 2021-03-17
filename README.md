@@ -8,10 +8,14 @@ Script that performs enrichment analysis from a screen given formulation sheet a
 1) Install dependencies
 'pip3 install -r requirements.txt'
 
-2) Run file
+2a) (Optional) Create an executable file and run file through it
+a) 'pip install pyinstaller'
+b) 'pip --onefile -w Enrichment_interface.py'
+
+2b) Run file on terminal
 'python3 Enrichment_interface.py'
 
-## To-Do
+## ToDo
 1) Tests
 	* create test files
 	* write tests
