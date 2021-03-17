@@ -12,7 +12,9 @@ Script that performs enrichment analysis from a screen given formulation sheet a
 	
 	a) (Optional) Create an executable file and run file through it
 	* 'pip install pyinstaller'
-	* 'pip --onefile -w Enrichment_interface.py'
+	* 'pyinstaller --onefile -w Enrichment_interface.py'
+
+	If issue arise, check https://www.pyinstaller.org/
 
 	b) Run file on terminal
 	* 'python3 Enrichment_interface.py'
