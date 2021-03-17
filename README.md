@@ -15,6 +15,8 @@ Script that performs enrichment analysis from a screen given formulation sheet a
 	* 'pyinstaller --onefile -w Enrichment_interface.py'
 
 	If issue arise, check https://www.pyinstaller.org/
+	
+	Additional resource: https://www.youtube.com/watch?v=t51bT7WbeCM
 
 	b) Run file on terminal
 	* 'python3 Enrichment_interface.py'
