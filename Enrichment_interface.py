@@ -9,7 +9,7 @@ from tkinter import filedialog, Tk, StringVar, Label, Button, Entry, OptionMenu
 from os import path
 import sys
 
-import CSV2Excel_Functionalized
+import CSV2Excel
 
 class MyGUI: # pylint: disable=too-many-instance-attributes
     '''
@@ -235,7 +235,7 @@ class MyGUI: # pylint: disable=too-many-instance-attributes
             fg=color0, font=("arial", 12, "bold")).place(x=20, y=470)
 
         if not errors:
-            CSV2Excel_Functionalized.run_enrichment_analysis(fold_path, self.fsp, self.ncp,
+            CSV2Excel.run_enrichment_analysis(fold_path, self.fsp, self.ncp,
                 cell_types, percent, sort_by, percentile)
             print("Enrichment analysis performed!")
             exit1()
