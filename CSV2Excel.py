@@ -764,6 +764,9 @@ def create_excel_spreadsheet(destination_folder, sort_by, file_name="Enrichment 
         output:
             destination_file : directory of the excel spreadsheet created
     '''
+    if destination_folder[-1] != '/': # check to save file on correct folder
+        destination_folder = destination_folder + '/'
+
     destination_file = destination_folder + file_name + sort_by + ".xlsx"
     w_b = Workbook()
     w_b.save(destination_file)
