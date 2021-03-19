@@ -11,8 +11,8 @@ Script that performs enrichment analysis from a screen given formulation sheet a
 2) Run file either:
 	
 	a) (Optional) Create an executable file and run file through it
-	* 'pip install pyinstaller'
-	* 'pyinstaller --onefile -w Enrichment_interface.py'
+	* 'pip3 install pyinstaller'
+	* 'pyinstaller --hidden-import=cmath --onefile -w Enrichment_interface.py'
 
 	If issue arise, check https://www.pyinstaller.org/
 	
